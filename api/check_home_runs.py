@@ -6,12 +6,11 @@ import os
 
 # Add the parent directory to the path so we can import mlb_hr_tracker
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from mlb_hr_tracker import init_tracker
+from mlb_hr_tracker import check_home_runs
 
-def run_tracker():
-    """Run the MLB Home Run Tracker and return results"""
-    tracker = init_tracker()
-    results = tracker.check_for_home_runs()
+def run_check():
+    """Run the MLB Home Run Tracker check and return results"""
+    results = check_home_runs()
     return {
         "timestamp": datetime.now().isoformat(),
         "home_runs_found": len(results),
@@ -22,7 +21,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         """Handle GET requests to the endpoint"""
         try:
-            result = run_tracker()
+            result = run_check()
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
@@ -36,4 +35,4 @@ class Handler(BaseHTTPRequestHandler):
 
 def handler(event, context):
     """Handler for serverless function invocation"""
-    return run_tracker()
+    return run_check()
