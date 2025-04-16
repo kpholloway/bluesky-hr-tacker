@@ -80,6 +80,3 @@ The application uses temporary file storage for tracking home runs and maintaini
 ## License
 
 MIT
-## License
-
-MIT
