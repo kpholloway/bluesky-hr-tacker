@@ -182,4 +182,146 @@
                     pendingHRsList.innerHTML = '';
                     
                     // Sort by timestamp
-                    const sortedHRs = data.pending_hrs.sort((
+                    const sortedHRs = data.pending_hrs.sort((a, b) => {
+                        return new Date(a.timestamp) - new Date(b.timestamp);
+                    });
+                    
+                    sortedHRs.forEach(hr => {
+                        // Format the timestamp
+                        let timeStr = "Unknown time";
+                        try {
+                            const hrTime = new Date(hr.timestamp);
+                            timeStr = hrTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        } catch (e) {
+                            console.error("Error formatting time:", e);
+                        }
+                        
+                        pendingHRsList.innerHTML += `
+                            <div class="card mb-2 home-run-card">
+                                <div class="card-body p-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h5 class="card-title mb-1">${hr.player_name}</h5>
+                                        <span class="badge bg-primary">${timeStr}</span>
+                                    </div>
+                                    <h6 class="card-subtitle mb-2 text-muted">${hr.team_name} - HR #${hr.hr_count}</h6>
+                                    <p class="card-text small mb-0">${hr.description}</p>
+                                </div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    placeholder.style.display = 'block';
+                    pendingHRsList.innerHTML = '';
+                }
+            } catch (error) {
+                console.error('Error fetching pending HRs:', error);
+            }
+        }
+
+        // Function to manually check for home runs
+        async function checkHomeRuns() {
+            const checkBtn = document.getElementById('check-btn');
+            const checkResult = document.getElementById('check-result');
+            
+            checkBtn.disabled = true;
+            checkBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Checking...';
+            checkResult.innerHTML = '';
+            
+            try {
+                const response = await fetch('/api/check_home_runs');
+                const data = await response.json();
+                
+                checkBtn.disabled = false;
+                checkBtn.textContent = 'Check for Home Runs';
+                
+                if (data.home_runs_found > 0) {
+                    checkResult.innerHTML = `
+                        <div class="alert alert-success">
+                            Found ${data.home_runs_found} new home run(s)!
+                        </div>
+                    `;
+                    
+                    // Update the pending home runs list
+                    fetchPendingHRs();
+                } else {
+                    checkResult.innerHTML = `
+                        <div class="alert alert-info">
+                            No new home runs found.
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error checking for home runs:', error);
+                checkBtn.disabled = false;
+                checkBtn.textContent = 'Check for Home Runs';
+                checkResult.innerHTML = `
+                    <div class="alert alert-danger">
+                        Error checking for home runs. Check the console for details.
+                    </div>
+                `;
+            }
+        }
+
+        // Function to post daily summary
+        async function postDailySummary() {
+            const postBtn = document.getElementById('post-summary-btn');
+            const postResult = document.getElementById('post-result');
+            
+            postBtn.disabled = true;
+            postBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Posting...';
+            postResult.innerHTML = '';
+            
+            try {
+                const response = await fetch('/api/post_summary');
+                const data = await response.json();
+                
+                postBtn.disabled = false;
+                postBtn.textContent = 'Post Daily Summary';
+                
+                if (data.success) {
+                    postResult.innerHTML = `
+                        <div class="alert alert-success">
+                            Daily summary posted successfully!
+                        </div>
+                    `;
+                    
+                    // Clear the pending home runs list
+                    fetchPendingHRs();
+                } else {
+                    postResult.innerHTML = `
+                        <div class="alert alert-warning">
+                            Failed to post daily summary or no pending home runs.
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error posting daily summary:', error);
+                postBtn.disabled = false;
+                postBtn.textContent = 'Post Daily Summary';
+                postResult.innerHTML = `
+                    <div class="alert alert-danger">
+                        Error posting daily summary. Check the console for details.
+                    </div>
+                `;
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Fetch initial status
+            fetchStatus();
+            
+            // Fetch initial pending home runs
+            fetchPendingHRs();
+            
+            // Set up interval to refresh status and pending HRs
+            setInterval(fetchStatus, 60000); // Update every minute
+            setInterval(fetchPendingHRs, 60000); // Update every minute
+            
+            // Set up button handlers
+            document.getElementById('check-btn').addEventListener('click', checkHomeRuns);
+            document.getElementById('post-summary-btn').addEventListener('click', postDailySummary);
+        });
+    </script>
+</body>
+</html>
