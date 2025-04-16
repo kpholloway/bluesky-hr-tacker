@@ -1,23 +1,22 @@
-import time
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 import requests
+import os
+import json
 from statsapi import stats, schedule
 
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.FileHandler("hr_tracker.log"), logging.StreamHandler()]
+    handlers=[logging.FileHandler("/tmp/hr_tracker.log"), logging.StreamHandler()]
 )
 logger = logging.getLogger("MLB-HR-Tracker")
 
-# Bluesky API configuration
-# Note: You'll need to fill in these values with your actual credentials
+# Bluesky API configuration from environment variables
 BLUESKY_API_URL = "https://bsky.social/xrpc"
-# These would need to be set by the user of this code
-BLUESKY_USERNAME = "your_username"  
-BLUESKY_APP_PASSWORD = "your_app_password"  
+BLUESKY_USERNAME = os.environ.get("BLUESKY_USERNAME")
+BLUESKY_APP_PASSWORD = os.environ.get("BLUESKY_APP_PASSWORD")
 
 class BlueskyClient:
     def __init__(self, api_url, username, app_password):
@@ -78,8 +77,22 @@ class BlueskyClient:
 class MLBHomeRunTracker:
     def __init__(self, bluesky_client=None):
         self.bluesky_client = bluesky_client
-        self.tracked_hrs = set()  # Store unique identifiers for HRs we've already posted
+        self.tracked_hrs_file = "/tmp/tracked_hrs.json"
+        self.tracked_hrs = self.load_tracked_hrs()
         
+    def load_tracked_hrs(self):
+        """Load tracked home runs from file storage"""
+        try:
+            with open(self.tracked_hrs_file, "r") as f:
+                return set(json.load(f))
+        except:
+            return set()
+    
+    def save_tracked_hrs(self):
+        """Save tracked home runs to file storage"""
+        with open(self.tracked_hrs_file, "w") as f:
+            json.dump(list(self.tracked_hrs), f)
+    
     def get_todays_games(self):
         """Get today's MLB games"""
         today = datetime.now().strftime('%m/%d/%Y')
@@ -120,8 +133,6 @@ class MLBHomeRunTracker:
                 team_name = play.get("matchup", {}).get("batter", {}).get("team", {}).get("name", "Unknown Team")
                 
                 # Get the player's season HR total
-                # This would require an additional API call to get the player's stats
-                # For simplicity, we'll just include a placeholder
                 hr_count = self.get_player_hr_count(play.get("matchup", {}).get("batter", {}).get("id"))
                 
                 home_runs.append({
@@ -134,6 +145,10 @@ class MLBHomeRunTracker:
                 
                 # Mark this HR as tracked
                 self.tracked_hrs.add(play_id)
+                
+        # Save tracked HRs if any new ones were found
+        if home_runs:
+            self.save_tracked_hrs()
                 
         return home_runs
     
@@ -167,6 +182,7 @@ class MLBHomeRunTracker:
     
     def check_for_home_runs(self):
         """Check for new home runs in today's games"""
+        results = []
         games = self.get_todays_games()
         
         for game in games:
@@ -180,34 +196,35 @@ class MLBHomeRunTracker:
                 
                 for hr in home_runs:
                     logger.info(f"Found new home run: {hr['player_name']} ({hr['team_name']})")
-                    self.post_home_run(hr)
+                    success = self.post_home_run(hr)
+                    results.append({
+                        "player": hr['player_name'],
+                        "team": hr['team_name'],
+                        "posted": success
+                    })
+        
+        return results
+
+def init_tracker():
+    """Initialize the tracker with or without Bluesky client"""
+    # Only initialize the Bluesky client if credentials are available
+    bluesky_client = None
+    if BLUESKY_USERNAME and BLUESKY_APP_PASSWORD:
+        bluesky_client = BlueskyClient(
+            api_url=BLUESKY_API_URL,
+            username=BLUESKY_USERNAME,
+            app_password=BLUESKY_APP_PASSWORD
+        )
+    
+    return MLBHomeRunTracker(bluesky_client=bluesky_client)
 
 def main():
-    # Create Bluesky client (commented out - user would need to fill in credentials)
-    # bluesky_client = BlueskyClient(
-    #     api_url=BLUESKY_API_URL,
-    #     username=BLUESKY_USERNAME,
-    #     app_password=BLUESKY_APP_PASSWORD
-    # )
-    
-    # For testing without posting, pass None as the client
-    tracker = MLBHomeRunTracker(bluesky_client=None)
-    
-    logger.info("Starting MLB Home Run Tracker")
-    
-    try:
-        while True:
-            logger.info("Checking for home runs...")
-            tracker.check_for_home_runs()
-            
-            # Wait 60 seconds before checking again
-            logger.info("Waiting 60 seconds before next check...")
-            time.sleep(60)
-    except KeyboardInterrupt:
-        logger.info("Shutting down MLB Home Run Tracker")
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        raise
+    """Run the tracker once for testing or CLI use"""
+    tracker = init_tracker()
+    logger.info("Running MLB Home Run Tracker")
+    results = tracker.check_for_home_runs()
+    logger.info(f"Found and processed {len(results)} home runs")
+    return results
 
 if __name__ == "__main__":
     main()
