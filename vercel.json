@@ -11,8 +11,12 @@
   ],
   "crons": [
     {
-      "path": "/api/track_home_runs",
-      "schedule": "*/5 * * * *"
+      "path": "/api/check_home_runs",
+      "schedule": "0 0,4,8,12,16,20 * * *"
+    },
+    {
+      "path": "/api/post_summary",
+      "schedule": "0 23 * * *"
     }
   ]
 }
